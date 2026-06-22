@@ -1,0 +1,54 @@
+{
+  "name": "chat-app",
+  "version": "1.0.0",
+  "description": "基于Supabase的桌面通讯工具",
+  "author": "ChatApp",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run react-dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "react-dev": "react-scripts start",
+    "build": "react-scripts build && electron-builder",
+    "electron-dev": "electron ."
+  },
+  "build": {
+    "appId": "com.chatapp.desktop",
+    "productName": "通信工具",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "build/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "extraMetadata": {
+      "main": "electron/main.js"
+    }
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "electron-log": "^5.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "react-scripts": "5.0.1"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "electron": "^27.0.0",
+    "electron-builder": "^24.9.0",
+    "wait-on": "^7.2.0"
+  },
+  "homepage": "./",
+  "browserslist": {
+    "production": [
+      "last 1 electron version"
+    ],
+    "development": [
+      "last 1 electron version"
+    ]
+  }
+}

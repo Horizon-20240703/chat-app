@@ -1,0 +1,306 @@
+/* ============================================================
+   用户列表页样式
+   ============================================================ */
+
+.user-list-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-bg);
+}
+
+/* ---- 头部 ---- */
+.user-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.user-list-header h2 {
+  margin: 0;
+  font-size: var(--font-size-xl);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  -webkit-app-region: no-drag;
+}
+
+.current-username {
+  font-size: var(--font-size-sm);
+  opacity: 0.9;
+}
+
+.logout-btn {
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-inverse);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  transition: background var(--transition-fast);
+}
+
+.logout-btn:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* ---- 搜索栏 ---- */
+.search-bar {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border-light);
+  gap: var(--space-sm);
+}
+
+.search-icon {
+  font-size: var(--font-size-md);
+  opacity: 0.5;
+}
+
+.search-bar input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: var(--font-size-md);
+  background: transparent;
+  color: var(--color-text);
+}
+
+.search-bar input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.search-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  padding: 2px 6px;
+}
+
+/* ---- 用户列表内容 ---- */
+.user-list-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm);
+}
+
+/* ---- 用户卡片 ---- */
+.user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  gap: var(--space-md);
+}
+
+.user-item:hover {
+  background: var(--color-surface-hover);
+  transform: translateX(3px);
+}
+
+.user-item.has-unread {
+  background: rgba(102, 126, 234, 0.06);
+  border-left: 3px solid var(--color-primary);
+  padding-left: 13px;
+}
+
+/* ---- 头像 ---- */
+.user-avatar {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  background: var(--color-gradient);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-xl);
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.online-dot {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  background: var(--color-text-muted);
+  border: 2px solid var(--color-surface);
+  border-radius: var(--radius-full);
+}
+
+.online-dot.online {
+  background: var(--color-success);
+}
+
+/* ---- 用户信息 ---- */
+.user-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.user-name {
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.unread-badge {
+  background: var(--color-danger);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+.user-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: 3px;
+}
+
+.user-time {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+/* ---- 状态界面 ---- */
+.loading, .error-state, .empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--color-text-secondary);
+}
+
+.error-icon, .empty-icon {
+  font-size: 40px;
+  display: block;
+  margin-bottom: var(--space-md);
+}
+
+.error-state p, .empty-state p {
+  margin-bottom: var(--space-sm);
+}
+
+.empty-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.retry-btn {
+  margin-top: var(--space-md);
+  padding: 8px 20px;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.retry-btn:hover {
+  background: var(--color-primary-hover);
+}
+
+/* ---- 骨架屏 ---- */
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.skeleton-user-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: var(--space-md);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  background: linear-gradient(90deg, var(--color-bg-secondary) 0%, var(--color-border-light) 50%, var(--color-bg-secondary) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.skeleton-line {
+  height: 14px;
+  background: linear-gradient(90deg, var(--color-bg-secondary) 0%, var(--color-border-light) 50%, var(--color-bg-secondary) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-xs);
+}
+
+.skeleton-name {
+  width: 40%;
+}
+
+.skeleton-time {
+  width: 60%;
+  height: 10px;
+}
+
+/* ---- 刷新按钮 ---- */
+.refresh-btn {
+  margin: var(--space-sm) var(--space-md) var(--space-md);
+  padding: 10px;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  transition: all var(--transition-fast);
+}
+
+.refresh-btn:hover {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+}

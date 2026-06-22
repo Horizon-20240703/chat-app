@@ -1,0 +1,10 @@
+{
+  "project_id": "ldglgjcpcohflmcmgobo",
+  "api_url": "https://ldglgjcpcohflmcmgobo.supabase.co",
+  "db": {
+    "host": "db.ldglgjcpcohflmcmgobo.supabase.co",
+    "port": 5432,
+    "database": "postgres",
+    "schema": "public"
+  }
+}

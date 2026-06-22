@@ -1,0 +1,209 @@
+/* ============================================================
+   通信工具 — 全局样式 & CSS 设计变量
+   ============================================================ */
+
+/* ---- 设计 Token ---- */
+:root {
+  /* 颜色 */
+  --color-primary: #667eea;
+  --color-primary-hover: #5568d3;
+  --color-primary-light: #8b9cf7;
+  --color-primary-dark: #4a51c4;
+  --color-accent: #764ba2;
+  --color-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+  --color-bg: #f0f2f5;
+  --color-bg-secondary: #e8eaed;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f8f9fa;
+
+  --color-text: #1a1a2e;
+  --color-text-secondary: #555555;
+  --color-text-muted: #999999;
+  --color-text-inverse: #ffffff;
+
+  --color-danger: #e74c3c;
+  --color-danger-hover: #c0392b;
+  --color-success: #2ecc71;
+  --color-warning: #f39c12;
+  --color-info: #3498db;
+
+  --color-border: #e0e0e0;
+  --color-border-light: #f0f0f0;
+  --color-focus: rgba(102, 126, 234, 0.25);
+
+  /* 圆角 */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 50%;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.15);
+  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.2);
+
+  /* 间距 */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* 动画 */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+  --transition-slow: 0.4s ease;
+
+  /* 字体 */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+    'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
+    'Helvetica Neue', sans-serif;
+  --font-mono: 'Cascadia Code', 'Fira Code', 'Source Code Pro', Menlo,
+    Monaco, Consolas, 'Courier New', monospace;
+  --font-size-xs: 11px;
+  --font-size-sm: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 24px;
+}
+
+/* ---- 暗色模式 ---- */
+[data-theme="dark"] {
+  --color-bg: #1a1a2e;
+  --color-bg-secondary: #16213e;
+  --color-surface: #0f3460;
+  --color-surface-hover: #1a1a4e;
+
+  --color-text: #e0e0e0;
+  --color-text-secondary: #a0a0b0;
+  --color-text-muted: #6a6a7a;
+  --color-text-inverse: #ffffff;
+
+  --color-border: #2a2a4a;
+  --color-border-light: #1a1a3a;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #1a1a2e;
+    --color-bg-secondary: #16213e;
+    --color-surface: #0f3460;
+    --color-surface-hover: #1a1a4e;
+    --color-text: #e0e0e0;
+    --color-text-secondary: #a0a0b0;
+    --color-text-muted: #6a6a7a;
+    --color-border: #2a2a4a;
+    --color-border-light: #1a1a3a;
+  }
+}
+
+/* ---- 全局重置 ---- */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+  overflow: hidden;
+}
+
+code, pre {
+  font-family: var(--font-mono);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* ---- 滚动条美化 ---- */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-text-muted);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+/* ---- 动画 ---- */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.fade-in {
+  animation: fadeIn var(--transition-normal) ease forwards;
+}
+
+/* ---- 应用加载状态 ---- */
+.app-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: var(--color-bg);
+  gap: var(--space-md);
+  color: var(--color-text-secondary);
+}
+
+.app-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: var(--radius-full);
+  animation: spin 0.8s linear infinite;
+}
+
+/* ---- 骨架屏 ---- */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-secondary) 0%,
+    var(--color-border-light) 50%,
+    var(--color-bg-secondary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}

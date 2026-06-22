@@ -1,0 +1,289 @@
+/* ============================================================
+   消息列表组件样式
+   ============================================================ */
+
+.message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ---- 日期分隔线 ---- */
+.date-separator {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-md) 0;
+}
+
+.date-separator span {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  padding: 4px 14px;
+  border-radius: var(--radius-xl);
+  font-weight: 500;
+}
+
+/* ---- 消息行 ---- */
+.message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  padding: 1px 0;
+  animation: fadeIn 0.3s ease;
+}
+
+.message-row.self {
+  flex-direction: row-reverse;
+}
+
+/* 分组间距 */
+.message-row.group-start {
+  margin-top: 6px;
+}
+
+/* ---- 头像 ---- */
+.msg-avatar {
+  width: 32px;
+  height: 32px;
+  background: var(--color-gradient);
+  color: var(--color-text-inverse);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-sm);
+  font-weight: bold;
+  flex-shrink: 0;
+  align-self: flex-end;
+}
+
+.msg-avatar-spacer {
+  width: 32px;
+  flex-shrink: 0;
+}
+
+/* ---- 发送者名字 ---- */
+.msg-sender-name {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+  margin-left: 4px;
+}
+
+/* ---- 消息内容 ---- */
+.message-content {
+  max-width: 65%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- 消息气泡 ---- */
+.message-bubble {
+  padding: 10px 14px;
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  position: relative;
+}
+
+/* 自己的消息 — 紫色圆角气泡 */
+.message-row.self .message-bubble {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  border-radius: var(--radius-lg) var(--radius-xs) var(--radius-lg) var(--radius-lg);
+}
+
+/* 对方的消息 — 白色圆角气泡 */
+.message-row.other .message-bubble {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: var(--radius-xs) var(--radius-lg) var(--radius-lg) var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 连续消息的头尾圆角调整 */
+.message-row.self.group-start .message-bubble {
+  border-top-right-radius: var(--radius-lg);
+}
+.message-row.self:not(.group-end) .message-bubble {
+  border-bottom-right-radius: var(--radius-xs);
+}
+.message-row.other.group-start .message-bubble {
+  border-top-left-radius: var(--radius-lg);
+}
+.message-row.other:not(.group-end) .message-bubble {
+  border-bottom-left-radius: var(--radius-xs);
+}
+
+/* ---- 消息状态 ---- */
+.msg-status {
+  font-size: 12px;
+  align-self: flex-end;
+  padding-bottom: 4px;
+}
+
+.status-sent {
+  color: var(--color-text-muted);
+}
+
+.status-read {
+  color: var(--color-info);
+}
+
+/* ---- 消息间距 ---- */
+.message-spacer {
+  width: 40px;
+}
+
+/* ---- 媒体消息 (图片/视频) ---- */
+.message-content.media-content {
+  max-width: 75%;
+}
+
+.image-wrapper {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.self-image {
+  border: 2px solid var(--color-primary);
+}
+.other-image {
+  border: 2px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.msg-image {
+  display: block;
+  max-width: 100%;
+  max-height: 300px;
+  width: auto;
+  height: auto;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.msg-image.loaded {
+  opacity: 1;
+}
+
+.image-placeholder {
+  padding: 20px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.image-wrapper:hover .msg-image {
+  transform: scale(1.02);
+  transition: transform 0.2s;
+}
+
+/* ---- 图片全屏查看 ---- */
+.image-fullscreen {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  cursor: pointer;
+  animation: fadeIn 0.2s ease;
+}
+.image-fullscreen img {
+  max-width: 95vw;
+  max-height: 95vh;
+  object-fit: contain;
+}
+.fullscreen-close {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  background: rgba(255,255,255,0.2);
+  color: white;
+  border: none;
+  font-size: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fullscreen-close:hover {
+  background: rgba(255,255,255,0.4);
+}
+
+/* ---- 视频消息 ---- */
+.video-wrapper {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.msg-video {
+  display: block;
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: var(--radius-md);
+}
+
+/* ---- 文件附件 ---- */
+.file-attachment {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: var(--color-text);
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+}
+
+.message-row.self .file-attachment {
+  border-color: var(--color-primary);
+}
+
+.file-attachment:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-primary);
+}
+
+.file-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.file-name {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-download {
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ---- 媒体加载失败 ---- */
+.media-error {
+  padding: 16px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+}
