@@ -43,3 +43,4 @@ test-supabase.js
 fix-schema.sql
 enable-pages.js
 docs/
+scripts/

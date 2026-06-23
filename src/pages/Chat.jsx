@@ -77,9 +77,18 @@ function Chat() {
         return;
       }
 
-      // 2. 确保当前用户有密钥对
+      // 2. 加载己方密钥对
       let myKeyPair = await loadMyKeyPair();
       if (!myKeyPair) {
+        // 检查 Supabase 是否已有公钥 (防止覆盖)
+        const { data: myKey } = await supabase.from('user_keys')
+          .select('public_key').eq('user_id', currentUser.id).single();
+        if (myKey?.public_key) {
+          console.warn('本地密钥丢失，消息无法解密。请重新注册账号。');
+          setE2eeReady(true);
+          return;
+        }
+        // 首次使用，生成密钥对
         myKeyPair = await generateAndRegisterKeyPair();
       }
 
