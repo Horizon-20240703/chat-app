@@ -41,3 +41,5 @@ test-supabase.js
 
 # 修复脚本(临时)
 fix-schema.sql
+enable-pages.js
+docs/

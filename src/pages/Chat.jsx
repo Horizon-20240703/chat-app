@@ -49,10 +49,14 @@ function Chat() {
       navigate('/users');
       return;
     }
-    setupE2EE();
-    loadMessages();
-    setupRealtime();
-    checkAlerts();
+
+    const init = async () => {
+      await setupE2EE();       // 1. 先建立加密密钥
+      await loadMessages();    // 2. 再加载消息（此时可解密）
+      setupRealtime();         // 3. 订阅新消息
+      checkAlerts();
+    };
+    init();
 
     return () => {
       if (channelRef.current) {
@@ -302,20 +306,40 @@ function Chat() {
     if (!trimmed || sending) return;
 
     setSending(true);
-    try {
-      let content = trimmed;
+    setNewMessage('');
 
+    // 乐观更新：立即显示（本地明文）
+    const tempId = 'temp-' + Date.now();
+    const optimisticMsg = {
+      id: tempId,
+      sender_id: currentUser.id,
+      receiver_id: otherUser.id,
+      content: trimmed,
+      content_type: 'text',
+      is_read: false,
+      created_at: new Date().toISOString()
+    };
+
+    try {
       // E2EE 加密
+      let content = trimmed;
       if (convKeyRef.current) {
         content = await encryptMessage(trimmed, convKeyRef.current);
       }
 
-      await sendMessage(currentUser.id, otherUser.id, content, 'text');
-      setNewMessage('');
-      await loadMessages();
+      setMessages(prev => [...prev, optimisticMsg]);
+
+      const sent = await sendMessage(currentUser.id, otherUser.id, content, 'text');
+
+      // 替换临时消息为真实消息
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...sent, content: trimmed } : m));
+
       await checkAlerts();
     } catch (err) {
       console.error('发送消息失败:', err);
+      // 移除失败的消息
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      setNewMessage(trimmed); // 恢复输入
     } finally {
       setSending(false);
     }
