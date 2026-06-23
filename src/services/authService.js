@@ -182,6 +182,9 @@ export function onAuthStateChange(callback) {
  * 存储 E2EE 私钥到 IndexedDB (仅注册时调用一次)
  */
 async function storeKeyPair(privateKey) {
+  // CryptoKey 不能直接存 IndexedDB → 导出为 PKCS8 base64
+  const { exportPrivateKey } = await import('./encryptionService');
+  const base64 = await exportPrivateKey(privateKey);
   const db = await new Promise((resolve, reject) => {
     const req = indexedDB.open('chat-local-keys', 1);
     req.onupgradeneeded = (e) => {
@@ -193,7 +196,7 @@ async function storeKeyPair(privateKey) {
     req.onerror = () => reject(req.error);
   });
   const tx = db.transaction('keys', 'readwrite');
-  tx.objectStore('keys').put(privateKey, 'my-keypair');
+  tx.objectStore('keys').put(base64, 'my-keypair');
   return new Promise((resolve, reject) => {
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
@@ -206,4 +209,136 @@ async function storeKeyPair(privateKey) {
 export async function isAuthenticated() {
   const session = await getCurrentSession();
   return !!session;
+}
+
+// ===============================================================
+// E2EE 密钥初始化（登录后自动调用，确保每个用户都有密钥对）
+// ===============================================================
+
+/**
+ * 从 IndexedDB 加载本地存储的私钥（PKCS8 base64 → CryptoKey）
+ */
+async function loadLocalPrivateKey() {
+  try {
+    const db = await new Promise((resolve, reject) => {
+      const req = indexedDB.open('chat-local-keys', 1);
+      req.onupgradeneeded = (e) => {
+        if (!e.target.result.objectStoreNames.contains('keys')) {
+          e.target.result.createObjectStore('keys');
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    const tx = db.transaction('keys', 'readonly');
+    const request = tx.objectStore('keys').get('my-keypair');
+    const base64 = await new Promise((resolve) => {
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => resolve(null);
+    });
+    if (!base64 || typeof base64 !== 'string') return null;
+    // If it's a corrupted CryptoKey object (old format, not base64), discard
+    if (base64.byteLength !== undefined || !base64.match(/^[A-Za-z0-9+/=]+$/)) {
+      console.log('[E2EE] Discarding corrupted old-format key data');
+      return null;
+    }
+    // Import back to CryptoKey
+    const { importPrivateKey } = await import('./encryptionService');
+    return importPrivateKey(base64);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 存储私钥到 IndexedDB（CryptoKey → PKCS8 base64）
+ */
+async function saveLocalPrivateKey(privateKey) {
+  const { exportPrivateKey } = await import('./encryptionService');
+  const base64 = await exportPrivateKey(privateKey);
+  const db = await new Promise((resolve, reject) => {
+    const req = indexedDB.open('chat-local-keys', 1);
+    req.onupgradeneeded = (e) => {
+      if (!e.target.result.objectStoreNames.contains('keys')) {
+        e.target.result.createObjectStore('keys');
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  const tx = db.transaction('keys', 'readwrite');
+  tx.objectStore('keys').put(base64, 'my-keypair');
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
+ * 确保当前用户拥有 E2EE 密钥对（登录后自动调用）
+ * - 本地有私钥 → 完成
+ * - 本地无私钥、Supabase 有公钥 → 警告（本地密钥丢失）
+ * - 本地无私钥、Supabase 无公钥 → 首次生成
+ *
+ * @param {string} userId - 当前用户 ID
+ * @returns {Promise<boolean>} 是否成功（或已有）密钥对
+ */
+export async function ensureE2EEKeys(userId) {
+  console.log('[E2EE] ensureE2EEKeys called for', userId?.slice(0, 8));
+  try {
+    // 1. 检查 Supabase 是否已有公钥（优先，因为这是服务器端的真实状态）
+    const { data: remoteKey, error: checkErr } = await supabase
+      .from('user_keys')
+      .select('public_key')
+      .eq('user_id', userId)
+      .single();
+
+    if (checkErr && checkErr.code !== 'PGRST116') {
+      // PGRST116 = no rows returned, which is expected for new users
+      console.log('[E2EE] Supabase check error:', checkErr.message);
+    }
+
+    // 2. 本地有私钥，检查是否需要补传公钥
+    const localKey = await loadLocalPrivateKey();
+    if (localKey) {
+      if (remoteKey?.public_key) {
+        console.log('[E2EE] Local key + remote key both present, OK');
+        return true;
+      }
+      // 本地有私钥但服务器没有公钥 → 重新生成（旧公钥从未上传，无对话受影响）
+      console.log('[E2EE] Local key found but remote missing, regenerating key pair...');
+    }
+
+    // 3. 本地无私钥，服务器有公钥 → 删旧公钥，重新生成
+    if (remoteKey?.public_key) {
+      console.warn('[E2EE] Remote key exists but local lost. Deleting old and regenerating...');
+      await supabase.from('user_keys').delete().eq('user_id', userId);
+      // fall through to step 4
+    }
+
+    // 4. 首次生成密钥对（本地无私钥 + 服务器无公钥）
+    console.log('[E2EE] First time, generating new key pair...');
+    const { generateKeyPair } = await import('./encryptionService');
+    const keyPair = await generateKeyPair();
+
+    // 上传公钥到 Supabase
+    const { error: upsertErr } = await supabase.from('user_keys').upsert({
+      user_id: userId,
+      public_key: keyPair.publicKey,
+      updated_at: new Date().toISOString()
+    });
+    if (upsertErr) {
+      console.error('[E2EE] Failed to upload public key:', upsertErr.message);
+      throw upsertErr;
+    }
+
+    // 存储私钥到 IndexedDB
+    await saveLocalPrivateKey(keyPair.privateKey);
+
+    console.log('[E2EE] Key pair generated and registered successfully');
+    return true;
+  } catch (err) {
+    console.error('[E2EE] Initialization failed:', err);
+    return false;
+  }
 }

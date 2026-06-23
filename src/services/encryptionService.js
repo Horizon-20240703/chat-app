@@ -111,6 +111,33 @@ export async function unwrapPrivateKey(wrappedKeyBase64, saltBase64, password) {
 }
 
 /**
+ * 导出私钥为 PKCS8 Base64 字符串（用于 IndexedDB 存储）
+ * CryptoKey 对象不能直接存入 IndexedDB（结构化克隆不支持）
+ * @param {CryptoKey} privateKey
+ * @returns {Promise<string>}
+ */
+export async function exportPrivateKey(privateKey) {
+  const exported = await crypto.subtle.exportKey('pkcs8', privateKey);
+  return arrayBufferToBase64(exported);
+}
+
+/**
+ * 从 PKCS8 Base64 字符串导入私钥
+ * @param {string} base64Key
+ * @returns {Promise<CryptoKey>}
+ */
+export async function importPrivateKey(base64Key) {
+  const buffer = base64ToArrayBuffer(base64Key);
+  return crypto.subtle.importKey(
+    'pkcs8',
+    buffer,
+    KEY_PAIR_ALGORITHM,
+    true,
+    ['deriveBits']
+  );
+}
+
+/**
  * 从密码派生包裹密钥 (PBKDF2 → AES-KW)
  */
 async function deriveWrappingKey(password, salt) {
@@ -174,7 +201,7 @@ export async function deriveConversationKey(myPrivateKey, theirPublicKeyBase64) 
     },
     hkdfKey,
     ENCRYPT_ALGORITHM,
-    false,
+    true,   // extractable — 需要导出存 IndexedDB 复用
     ['encrypt', 'decrypt']
   );
 }
@@ -326,7 +353,7 @@ export function getConversationId(userId1, userId2) {
 // 工具函数
 // ===========================================
 
-function arrayBufferToBase64(buffer) {
+export function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i++) {
@@ -335,7 +362,7 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
-function base64ToArrayBuffer(base64) {
+export function base64ToArrayBuffer(base64) {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {

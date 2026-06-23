@@ -7,7 +7,8 @@ import { supabase } from '../lib/supabaseClient';
 import {
   generateKeyPair, importPublicKey, deriveConversationKey,
   encryptMessage, decryptMessage, storeConversationKey, loadConversationKey,
-  getConversationId, exportPublicKey
+  getConversationId, exportPublicKey,
+  arrayBufferToBase64, base64ToArrayBuffer
 } from '../services/encryptionService';
 import {
   uploadFile, getSignedUrl, getBandwidthAlert, getStorageAlert,
@@ -38,6 +39,7 @@ function Chat() {
   const messagesContainerRef = useRef(null);
   const channelRef = useRef(null);
   const convKeyRef = useRef(null);                 // 当前对话的 AES 密钥
+  const hasRekeyedRef = useRef(false);              // 防止无限 rekey 循环
   const lastMessageCountRef = useRef(0);
   const fileInputRef = useRef(null);
 
@@ -61,60 +63,126 @@ function Chat() {
     return () => {
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
     };
   }, [userId]);
 
+  // ===========================================
+  // E2EE 设置: 加载己方密钥 + 获取对方公钥 + 派生对话密钥
+  // 增加重试机制：对方公钥可能尚未上传，轮询等待（最多 30s）
+  // ===========================================
   const setupE2EE = async () => {
     try {
       const convId = getConversationId(currentUser.id, otherUser.id);
 
-      // 1. 尝试从 IndexedDB 加载已有的对话密钥
-      let convKey = await loadConversationKey(convId);
-      if (convKey) {
-        convKeyRef.current = convKey;
-        setE2eeReady(true);
-        return;
-      }
-
-      // 2. 加载己方密钥对
+      // 1. 加载己方密钥对
       let myKeyPair = await loadMyKeyPair();
       if (!myKeyPair) {
-        // 检查 Supabase 是否已有公钥 (防止覆盖)
+        // 检查 Supabase 是否已有公钥
         const { data: myKey } = await supabase.from('user_keys')
           .select('public_key').eq('user_id', currentUser.id).single();
         if (myKey?.public_key) {
-          console.warn('本地密钥丢失，消息无法解密。请重新注册账号。');
-          setE2eeReady(true);
-          return;
+          // 本地密钥丢失但远程有 → 删旧公钥，重新生成
+          console.warn('[Chat] Local key lost, deleting old remote and regenerating...');
+          await supabase.from('user_keys').delete().eq('user_id', currentUser.id);
         }
         // 首次使用，生成密钥对
         myKeyPair = await generateAndRegisterKeyPair();
       }
 
-      // 3. 获取对方公钥
+      // 2. 获取对方公钥（带重试：轮询最多 30 秒）
+      let theirPublicKey = null;
+      const maxRetries = 30;
+      for (let i = 0; i < maxRetries; i++) {
+        const { data: theirKeys } = await supabase
+          .from('user_keys')
+          .select('public_key')
+          .eq('user_id', otherUser.id)
+          .single();
+
+        if (theirKeys?.public_key) {
+          theirPublicKey = theirKeys.public_key;
+          break;
+        }
+        console.log(`[E2EE] 等待对方公钥... (${i + 1}/${maxRetries})`);
+        await new Promise(r => setTimeout(r, 1000));
+      }
+
+      if (!theirPublicKey) {
+        console.warn('[E2EE] 对方公钥超时未获取，暂不使用 E2EE');
+        setE2eeReady(true);
+        // convKeyRef 保持 null，但后续收到密文时会触发 retrySetupE2EE
+        return;
+      }
+
+      // 3. 派生对话密钥
+      const convKey = await deriveConversationKey(myKeyPair.privateKey, theirPublicKey);
+      convKeyRef.current = convKey;
+
+      // 4. 存储到 IndexedDB (避免重复计算)
+      await storeConversationKey(convId, convKey);
+      setE2eeReady(true);
+      console.log('[E2EE] 对话密钥建立成功 ✓');
+    } catch (err) {
+      console.error('[E2EE] 初始化失败，回退到明文模式:', err);
+      setE2eeReady(true);
+    }
+  };
+
+  // 重试/强制重建 E2EE 密钥（解密失败时调用）
+  // force=true: 即使 convKeyRef 已存在也重新派生（用于密钥不匹配场景）
+  // force=true + rekey=true: 检测到密钥不匹配 → 生成全新密钥对
+  const retrySetupE2EE = async (force = false, rekey = false) => {
+    if (!force && convKeyRef.current) return true;
+
+    if (force) {
+      console.log('[E2EE] 解密失败，强制重建对话密钥...');
+      convKeyRef.current = null;
+    } else {
+      console.log('[E2EE] 检测到密文但无解密密钥，尝试重建...');
+    }
+
+    try {
+      let myKeyPair = await loadMyKeyPair();
+
+      // 密钥不匹配恢复：生成全新密钥对（直接 upsert 覆盖，避免 delete→upsert 竞态）
+      // 每会话只允许 rekey 一次，防止双方密钥不同步时的无限循环
+      if (rekey) {
+        if (hasRekeyedRef.current) {
+          console.warn('[E2EE] 已 rekey 过，跳过（需等待对方同步）');
+          return false;
+        }
+        hasRekeyedRef.current = true;
+        console.warn('[E2EE] 检测到密钥不匹配，生成全新密钥对...');
+        myKeyPair = await generateAndRegisterKeyPair();
+        toast.showToast('🔑 密钥已自动更新，请发送一条消息以同步对方密钥', 'info');
+        console.log('[E2EE] 全新密钥对已生成并注册到 Supabase');
+      }
+
+      if (!myKeyPair) {
+        console.warn('[E2EE retry] 本地无私钥，放弃');
+        return false;
+      }
+
       const { data: theirKeys } = await supabase
         .from('user_keys')
         .select('public_key')
         .eq('user_id', otherUser.id)
         .single();
-
       if (!theirKeys?.public_key) {
-        console.warn('对方尚未注册加密密钥，暂不使用 E2EE');
-        setE2eeReady(true);  // 仍可正常聊天，只是不加密
-        return;
+        console.warn('[E2EE retry] 对方无公钥，放弃');
+        return false;
       }
-
-      // 4. 派生对话密钥
-      convKey = await deriveConversationKey(myKeyPair.privateKey, theirKeys.public_key);
+      const convKey = await deriveConversationKey(myKeyPair.privateKey, theirKeys.public_key);
       convKeyRef.current = convKey;
-
-      // 5. 存储到 IndexedDB (避免重复计算)
+      const convId = getConversationId(currentUser.id, otherUser.id);
       await storeConversationKey(convId, convKey);
-      setE2eeReady(true);
+      console.log('[E2EE] 重建对话密钥成功 ✓');
+      return true;
     } catch (err) {
-      console.error('E2EE 初始化失败，回退到明文模式:', err);
-      setE2eeReady(true);  // 降级为明文
+      console.error('[E2EE retry] 失败:', err.message);
+      return false;
     }
   };
 
@@ -124,13 +192,31 @@ function Chat() {
       const db = await openLocalDB();
       const tx = db.transaction('keys', 'readonly');
       const request = tx.objectStore('keys').get('my-keypair');
-      return new Promise((resolve) => {
+      const base64 = await new Promise((resolve) => {
         request.onsuccess = () => resolve(request.result || null);
         request.onerror = () => resolve(null);
       });
+      if (!base64) return null;
+      // 旧格式检测：如果是 ArrayBuffer（损坏的 CryptoKey），丢弃
+      if (typeof base64 !== 'string' || base64.byteLength !== undefined || !/^[A-Za-z0-9+/=]+$/.test(base64)) {
+        console.log('[E2EE] Discarding corrupted old-format key from IndexedDB');
+        return null;
+      }
+      // 从 PKCS8 base64 导入回 CryptoKey，包装为 key pair 对象
+      const privateKey = await importPrivateKeyFromBase64(base64);
+      return { privateKey };
     } catch {
       return null;
     }
+  };
+
+  const importPrivateKeyFromBase64 = async (base64Key) => {
+    const buffer = base64ToArrayBuffer(base64Key);
+    return crypto.subtle.importKey(
+      'pkcs8', buffer,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true, ['deriveBits']
+    );
   };
 
   const generateAndRegisterKeyPair = async () => {
@@ -149,9 +235,12 @@ function Chat() {
   };
 
   const storeMyKeyPair = async (privateKey) => {
+    // CryptoKey 不能直接存 IndexedDB → 先导出为 PKCS8 base64
+    const exported = await crypto.subtle.exportKey('pkcs8', privateKey);
+    const base64 = arrayBufferToBase64(exported);
     const db = await openLocalDB();
     const tx = db.transaction('keys', 'readwrite');
-    tx.objectStore('keys').put(privateKey, 'my-keypair');
+    tx.objectStore('keys').put(base64, 'my-keypair');
     return new Promise((resolve, reject) => {
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
@@ -198,6 +287,12 @@ function Chat() {
   // Supabase Realtime 订阅
   // ===========================================
   const setupRealtime = () => {
+    // 先清理旧频道（防止 Strict Mode 双挂载冲突）
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
     const channel = supabase
       .channel(`chat-${currentUser.id}-${otherUser.id}`)
       .on('postgres_changes', {
@@ -208,11 +303,46 @@ function Chat() {
       }, async (payload) => {
         let msg = payload.new;
 
-        // E2EE 解密
-        if (convKeyRef.current && msg.content_type === 'text') {
-          try {
-            msg = { ...msg, content: await decryptMessage(msg.content, convKeyRef.current) };
-          } catch { /* 明文消息或解密失败，保持原样 */ }
+        // E2EE 解密（无密钥→建立，解密失败→强制重建→自修复→降级显示）
+        if (msg.content_type === 'text' && looksEncrypted(msg.content)) {
+          // 第一步：确保有解密密钥
+          if (!convKeyRef.current) {
+            await retrySetupE2EE(false);
+          }
+          if (convKeyRef.current) {
+            // 尝试1: 当前密钥解密
+            try {
+              msg = { ...msg, content: await decryptMessage(msg.content, convKeyRef.current) };
+            } catch (e1) {
+              console.warn('[Realtime] 第1次解密失败:', e1.message?.slice(0, 50));
+              // 尝试2: 强制重建密钥
+              try {
+                await retrySetupE2EE(true); // force re-derive
+                if (convKeyRef.current) {
+                  msg = { ...msg, content: await decryptMessage(msg.content, convKeyRef.current) };
+                  console.log('[Realtime] 强制重建后解密成功 ✓');
+                }
+              } catch (e2) {
+                console.warn('[Realtime] 第2次解密失败:', e2.message?.slice(0, 50));
+                // 尝试3: 自修复（重新生成密钥对）
+                try {
+                  await retrySetupE2EE(true, true); // force + rekey
+                  if (convKeyRef.current) {
+                    msg = { ...msg, content: await decryptMessage(msg.content, convKeyRef.current) };
+                    console.log('[Realtime] 密钥对重建后解密成功 ✓');
+                  }
+                } catch (e3) {
+                  console.error('[Realtime] 第3次解密也失败');
+                  msg = {
+                    ...msg,
+                    content: hasRekeyedRef.current
+                      ? '🔄 等待对方同步密钥（发送一条消息可触发同步）'
+                      : '🔒 无法解密（密钥已更新）'
+                  };
+                }
+              }
+            }
+          }
         }
 
         setMessages(prev => {
@@ -220,6 +350,20 @@ function Chat() {
           return [...prev, msg];
         });
         markMessagesAsRead(currentUser.id, otherUser.id).catch(() => {});
+      })
+      // 监听 UPDATE：图片/文件上传完成后替换占位内容
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages',
+        filter: `sender_id=eq.${otherUser.id}`
+      }, (payload) => {
+        const updated = payload.new;
+        setMessages(prev => prev.map(m =>
+          m.id === updated.id
+            ? { ...m, content: updated.content, content_type: updated.content_type }
+            : m
+        ));
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
@@ -292,14 +436,80 @@ function Chat() {
     }
   };
 
+  // 判断是否为 base64 密文（跳过明文、中文、文件 data URL）
+  const looksEncrypted = (content) => {
+    if (!content || content.startsWith('data:')) return false;
+    // 密文特征：纯 base64 字符，长度 > 30，不含中文
+    return /^[A-Za-z0-9+/=]+$/.test(content) && content.length > 30;
+  };
+
   const decryptMessages = async (msgs) => {
-    if (!convKeyRef.current) return msgs;
+    if (!msgs || msgs.length === 0) return msgs;
+
+    // 检查是否有需要解密的密文消息
+    const hasEncrypted = msgs.some(msg =>
+      msg.content_type === 'text' && msg.content && looksEncrypted(msg.content)
+    );
+
+    if (!hasEncrypted) return msgs;
+
+    // 如果没有解密密钥但有密文，尝试建立 E2EE
+    if (!convKeyRef.current) {
+      const ok = await retrySetupE2EE(false);
+      if (!ok) {
+        console.warn('[Decrypt] 无法建立 E2EE 密钥，密文消息将原样显示');
+        return msgs;
+      }
+    }
+
+    // 解密失败计数（用于判断是否需要自我修复）
+    let failCount = 0;
+
     return Promise.all(msgs.map(async (msg) => {
-      if (msg.content_type === 'text' && msg.content) {
+      if (msg.content_type === 'text' && msg.content && looksEncrypted(msg.content)) {
+        // 尝试1: 用当前密钥解密
         try {
-          return { ...msg, content: await decryptMessage(msg.content, convKeyRef.current) };
-        } catch {
-          return msg; // 明文或旧格式，保持原样
+          const plaintext = await decryptMessage(msg.content, convKeyRef.current);
+          hasRekeyedRef.current = false;  // 解密成功，重置 rekey 标记
+          return { ...msg, content: plaintext };
+        } catch (e1) {
+          failCount++;
+          console.warn(`[Decrypt] 第1次解密失败 (累计${failCount}):`, e1.message?.slice(0, 50));
+
+          // 尝试2: 强制重新派生密钥（获取最新公钥）
+          try {
+            const ok = await retrySetupE2EE(true);  // force=true
+            if (ok && convKeyRef.current) {
+              const plaintext = await decryptMessage(msg.content, convKeyRef.current);
+              console.log('[Decrypt] 强制重建后解密成功 ✓');
+              hasRekeyedRef.current = false;
+              return { ...msg, content: plaintext };
+            }
+          } catch (e2) {
+            console.warn('[Decrypt] 第2次解密失败:', e2.message?.slice(0, 50));
+          }
+
+          // 尝试3: 检测到密钥不匹配 → 生成全新密钥对
+          try {
+            console.warn('[Decrypt] 尝试自我修复: 重新生成密钥对');
+            const ok = await retrySetupE2EE(true, true);  // force=true, rekey=true
+            if (ok && convKeyRef.current) {
+              const plaintext = await decryptMessage(msg.content, convKeyRef.current);
+              console.log('[Decrypt] 密钥对重建后解密成功 ✓');
+              hasRekeyedRef.current = false;
+              return { ...msg, content: plaintext };
+            }
+          } catch (e3) {
+            console.warn('[Decrypt] 第3次解密失败:', e3.message?.slice(0, 50));
+          }
+
+          // 全部尝试失败 → 显示友好提示（区分是否已自修复）
+          return {
+            ...msg,
+            content: hasRekeyedRef.current
+              ? '🔄 等待对方同步密钥（发送一条消息可触发同步）'
+              : '🔒 无法解密（密钥已更新）'
+          };
         }
       }
       return msg;

@@ -22,8 +22,10 @@
       "package.json"
     ],
     "win": {
-      "target": "portable"
+      "target": "portable",
+      "sign": null
     },
+    "forceCodeSigning": false,
     "extraMetadata": {
       "main": "electron/main.js"
     }

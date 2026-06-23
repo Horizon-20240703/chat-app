@@ -142,6 +142,10 @@ CREATE POLICY "user_keys_insert_own" ON user_keys
 CREATE POLICY "user_keys_update_own" ON user_keys
   FOR UPDATE USING (auth.uid() = user_id);
 
+--    仅本人可删除自己的公钥
+CREATE POLICY "user_keys_delete_own" ON user_keys
+  FOR DELETE USING (auth.uid() = user_id);
+
 -- 8. 创建文件附件表
 --    追踪上传到 Supabase Storage 的文件，用于空间管理和自动清理
 CREATE TABLE IF NOT EXISTS file_attachments (
@@ -166,7 +170,13 @@ CREATE TABLE IF NOT EXISTS bandwidth_log (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 10. 创建索引（所有表的索引集中管理）
+-- 10. Supabase Realtime 配置（⚠️ 必须！否则消息只能靠轮询）
+ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+ALTER TABLE messages REPLICA IDENTITY FULL;
+ALTER PUBLICATION supabase_realtime ADD TABLE profiles;
+ALTER TABLE user_keys REPLICA IDENTITY FULL;
+
+-- 11. 创建索引（所有表的索引集中管理）
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
 CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
@@ -176,7 +186,7 @@ CREATE INDEX IF NOT EXISTS idx_file_attachments_created ON file_attachments(crea
 CREATE INDEX IF NOT EXISTS idx_bandwidth_log_user ON bandwidth_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_bandwidth_log_created ON bandwidth_log(created_at);
 
--- 11. 自动清理函数: 当存储空间不足时，按时间先后删除最旧的文件
+-- 12. 自动清理函数: 当存储空间不足时，按时间先后删除最旧的文件
 --     在 Supabase Dashboard > Storage 中创建 bucket 后，
 --     可通过 pg_cron 定期调用此函数
 CREATE OR REPLACE FUNCTION cleanup_oldest_files(
@@ -215,7 +225,7 @@ BEGIN
 END;
 $$;
 
--- 12. 月度带宽统计视图 (用于 80% 告警)
+-- 13. 月度带宽统计视图 (用于 80% 告警)
 CREATE OR REPLACE VIEW monthly_bandwidth AS
 SELECT
   user_id,
@@ -226,7 +236,7 @@ FROM bandwidth_log
 WHERE created_at >= DATE_TRUNC('month', NOW())
 GROUP BY user_id, direction, DATE_TRUNC('month', created_at);
 
--- 13. 存储使用量统计视图
+-- 14. 存储使用量统计视图
 CREATE OR REPLACE VIEW storage_usage AS
 SELECT
   uploader_id,
@@ -240,7 +250,7 @@ GROUP BY uploader_id;
 -- RLS 策略 (续)
 -- ===============================================================
 
--- 14. 启用新表的 RLS
+-- 15. 启用新表的 RLS
 ALTER TABLE file_attachments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bandwidth_log ENABLE ROW LEVEL SECURITY;
 
@@ -267,7 +277,7 @@ CREATE POLICY "bandwidth_log_insert" ON bandwidth_log
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- ===============================================================
--- 15. 创建 Storage Bucket
+-- 16. 创建 Storage Bucket
 --     ⚠️ 策略需要在 Supabase Dashboard > Storage 中手动设置（见末尾说明）
 -- ===============================================================
 
@@ -301,7 +311,7 @@ END $$;
 
 -- ===============================================================
 
--- 16. 触发器: 注册时自动创建 profile
+-- 17. 触发器: 注册时自动创建 profile
 --     从合成邮箱 username@chatapp.test 提取 username，
 --     如有冲突则追加 UUID 短后缀去重
 CREATE OR REPLACE FUNCTION handle_new_user()

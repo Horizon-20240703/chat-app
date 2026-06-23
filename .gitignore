@@ -1,46 +1,12 @@
-# 环境变量 (包含密钥)
-.env
-.env.local
-.env.production
-
-# Node
 node_modules/
-npm-debug.log*
-
-# Build
-build/
 dist/
-
-# IDE
+build/
+.env
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 .vscode/
 .idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# 可执行文件 (ngrok等)
-*.exe
-*.dll
-
-# Supabase 临时文件
 supabase/.temp/
-
-# 测试脚本
-test-supabase.js
-
-# Electron 日志
-*.log
-
-# 密钥文件
-*.pem
-*.key
-
-# 项目文档(含密钥)
-通信工具.md
-
-# 修复脚本(临时)
-fix-schema.sql
-enable-pages.js
-docs/
-scripts/

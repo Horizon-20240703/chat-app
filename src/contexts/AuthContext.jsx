@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getCurrentSession, onAuthStateChange, signIn, signUp, signOut } from '../services/authService';
+import { getCurrentSession, onAuthStateChange, signIn, signUp, signOut, ensureE2EEKeys } from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -22,6 +22,8 @@ export function AuthProvider({ children }) {
         if (mounted && session) {
           setCurrentUser(session.user);
           setProfile(session.profile);
+          // 等待 E2EE 密钥对就绪（防止与 Chat 竞争生成）
+          await ensureE2EEKeys(session.user.id);
         }
       } catch (err) {
         console.error('恢复会话失败:', err);
@@ -54,6 +56,8 @@ export function AuthProvider({ children }) {
       const result = await signIn(username, password);
       setCurrentUser(result.user);
       setProfile(result.profile);
+      // 等待 E2EE 密钥对就绪，再放行 UI
+      await ensureE2EEKeys(result.user.id);
       return result;
     } finally {
       setLoading(false);
@@ -67,6 +71,7 @@ export function AuthProvider({ children }) {
       const result = await signUp(username, password);
       setCurrentUser(result.user);
       setProfile(result.profile);
+      await ensureE2EEKeys(result.user.id);
       return result;
     } finally {
       setLoading(false);
